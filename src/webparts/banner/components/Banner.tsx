@@ -4,7 +4,7 @@ import type { IBannerProps } from './IBannerProps';
 
 interface IListItem {
   Id: number;
-  Title: string | null;
+  Title: string;
   banner_text: string;
   Attachments: boolean;
   AttachmentFiles: { ServerRelativeUrl: string }[];
@@ -15,10 +15,12 @@ const Banner: React.FC<IBannerProps> = (props) => {
   const { siteName, listName, duration } = props;
   const [listItems, setListItems] = React.useState<IListItem[]>([]);
   const [currentIndex, setCurrentIndex] = React.useState(0);
+  // Filtration for active items
+  const activeItems = listItems.filter(item => item.Active);
 
   // fetch the list and its attachments
   React.useEffect(() => {
-    const fetchListData = async () => {
+    const fetchListData = async (): Promise<void> => {
       const currSite = `https://mosh12.sharepoint.com/sites/${siteName}`;
       const currList = listName;
       try {
@@ -32,8 +34,9 @@ const Banner: React.FC<IBannerProps> = (props) => {
         const data = await response.json();
         console.log("dataList:", data);
 
-        if (data.value) {
-          const updatedItems = await Promise.all(data.value.map(async (item: any) => {
+        if (data.value) {    
+          const updatedItems = await Promise.all(data.value.map(async (item: IListItem) => {
+            let attachmentFiles = item.AttachmentFiles || [];
             if (item.Attachments) {
               const attachmentResponse = await fetch(`${currSite}/_api/web/lists/getbytitle('${currList}')/items(${item.Id})/AttachmentFiles`, {
                 method: "GET",
@@ -43,10 +46,13 @@ const Banner: React.FC<IBannerProps> = (props) => {
               });
               const attachmentData = await attachmentResponse.json();
               if (attachmentData.value && attachmentData.value.length > 0) {
-                item.AttachmentFiles = attachmentData.value;
+                attachmentFiles = attachmentData.value;
               }
             }
-            return item;
+            return{
+              ...item,
+              AttachmentFiles: attachmentFiles
+            }
           }));
           setListItems(updatedItems);
         }
@@ -55,15 +61,13 @@ const Banner: React.FC<IBannerProps> = (props) => {
       }
     };
 
-    fetchListData();
+    // eslint-disable-next-line no-void
+    void fetchListData();
   }, [siteName, listName, duration]);
 
   // next image every x minutes
   React.useEffect(() => {
-    if (listItems.length === 0) return;
-
-    // Filtration for active items
-    const activeItems = listItems.filter(item => item.Active);
+    if (activeItems.length === 0) return;
 
     // If there's only one active item, no need for the interval logic
     if (activeItems.length === 1) {
@@ -80,27 +84,27 @@ const Banner: React.FC<IBannerProps> = (props) => {
   }, [listItems, duration]);
 
   return (
-      <div className="relative flex-shrink-0 overflow-hidden w-[1217px] h-[291px] mx-auto flex justify-center items-center">
-        {listItems.length > 0 && (
+      <div className="relative flex-shrink-0 overflow-hidden w-[1217px] h-[291px] mx-auto flex justify-center items-center p-8">
+        {activeItems.length > 0 && (
           <>
             {/* Display the active items only */}
-            {listItems[currentIndex].Active && listItems[currentIndex].AttachmentFiles?.length > 0 && (
+            {activeItems[currentIndex].Active && activeItems[currentIndex].AttachmentFiles?.length > 0 && (
               <img
-                className="object-cover transition-opacity duration-1000 ease-in-out"
-                src={`https://mosh12.sharepoint.com${listItems[currentIndex].AttachmentFiles[0].ServerRelativeUrl}`}
+                className="absolute inset-0 w-full h-full object-cover z-10 transition-opacity duration-1000 ease-in-out"
+                src={`https://mosh12.sharepoint.com${activeItems[currentIndex].AttachmentFiles[0].ServerRelativeUrl}`}
                 alt="Banner"
               />
             )}
-            <p className="absolute inset-0 flex items-center text-center justify-center text-white text-3xl font-bold">
-              {listItems[currentIndex].banner_text}
+            <p className="absolute inset-0 z-20 flex items-center text-center justify-center text-[#41273c] text-3xl font-bold">
+              {activeItems[currentIndex].banner_text}
             </p>
-            {listItems.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
-                {listItems.map((_, index) => (
+            {activeItems.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2 z-30">
+                {activeItems.map((_, index) => (
                   <div
                     key={index}
-                    className={`w-2 h-2 rounded-full bg-white transition-all ${
-                      index === currentIndex ? 'bg-white' : 'opacity-50'
+                    className={`w-2 h-2 rounded-full bg-[#41273c] transition-all ${
+                      index === currentIndex ? 'bg-[#41273c]' : 'bg-[#41273c] opacity-50'
                     }`}
                   />
                 ))}
